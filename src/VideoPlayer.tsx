@@ -35,7 +35,7 @@ function getTimeRemaining(targetDate: Date) {
   // Considera o horário de Brasília (UTC-3)
   const now = new Date();
   const nowInBrasilia = new Date(
-    now.getTime() - now.getTimezoneOffset() * 60000 - 3 * 60 * 60000
+    now.getTime() - now.getTimezoneOffset() * 60000
   );
   const diff = targetDate.getTime() - nowInBrasilia.getTime();
 
@@ -51,7 +51,7 @@ function getTimeRemaining(targetDate: Date) {
   return { days, hours, minutes, seconds };
 }
 
-const COUNTDOWN_TARGET = new Date("2025-06-05T00:00:00-03:00");
+const COUNTDOWN_TARGET = new Date("2025-06-05T00:00:00-00:00");
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
   const [videoEntries, setVideoEntries] = useState<VideoEntry[]>([]);
