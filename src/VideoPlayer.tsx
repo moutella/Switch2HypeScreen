@@ -79,6 +79,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
           const idx = Math.floor(Math.random() * entries.length);
           setRandomIdx(idx);
           const dur = entries[idx].duration;
+          console.log(entries);
+          console.log(entries[idx].duration);
           console.log(dur);
           setRandomStart(dur > 0 ? Math.floor(Math.random() * dur) : 0);
         }
@@ -159,7 +161,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
           textShadow: "2px 2px 8px #000, 0px 0px 4px #000",
         }}
       >
-        {timeLeft.days} Dia(s), {timeLeft.hours}:{timeLeft.minutes}:
+        {timeLeft.days} Dia(s), {String(timeLeft.hours).padStart(2, "0")}:
+        {String(timeLeft.minutes).padStart(2, "0")}:
         {String(timeLeft.seconds).padStart(2, "0")}
       </div>
     </div>
