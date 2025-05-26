@@ -1,38 +1,39 @@
 import React, { useEffect, useState } from "react";
 
 type VideoPlayerProps = {
-  youtubeUrl: string; // Can be a playlist URL now
-  overlayText: string; // Not used anymore, but kept for compatibility
+  videoListUrl: string; // URL to a plain text file with video URLs, one per line
 };
 
-function getYouTubeEmbedUrl(
-  url: string,
-  randomIndex?: number,
-  startSeconds?: number
-): string {
-  // Extract playlist ID and (optionally) video IDs from the URL
-  const playlistMatch = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
-  let startParam = startSeconds ? `&start=${startSeconds}` : "";
-  if (playlistMatch) {
-    let base = `https://www.youtube.com/embed/videoseries?list=${playlistMatch[1]}&autoplay=1&rel=0&mute=1&loop=1${startParam}`;
-    if (typeof randomIndex === "number") {
-      base += `&index=${randomIndex}`;
-    }
-    return base;
-  }
-  // Fallback to single video
-  const videoMatch = url.match(
+type VideoEntry = {
+  id: string;
+  duration: number; // in seconds
+};
+
+function extractVideoId(url: string): string | null {
+  const match = url.match(
     /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
   );
-  return videoMatch
-    ? `https://www.youtube.com/embed/${videoMatch[1]}?autoplay=1&rel=0&mute=1&loop=1&playlist=${videoMatch[1]}${startParam}`
-    : "";
+  return match ? match[1] : null;
+}
+
+function parseDuration(durationStr: string): number {
+  // Accepts "hh:mm:ss", "mm:ss", or "ss"
+  const parts = durationStr.split(":").map(Number).reverse();
+  let seconds = 0;
+  if (parts[0]) seconds += parts[0];
+  if (parts[1]) seconds += parts[1] * 60;
+  if (parts[2]) seconds += parts[2] * 3600;
+  return seconds;
+}
+
+function getYouTubeEmbedUrl(videoId: string, startSeconds?: number): string {
+  const startParam = startSeconds ? `&start=${startSeconds}` : "";
+  return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&mute=1&loop=1&playlist=${videoId}${startParam}`;
 }
 
 function getTimeRemaining(targetDate: Date) {
   // Considera o horário de Brasília (UTC-3)
   const now = new Date();
-  // Ajusta o horário atual para UTC-3
   const nowInBrasilia = new Date(
     now.getTime() - now.getTimezoneOffset() * 60000 - 3 * 60 * 60000
   );
@@ -52,19 +53,74 @@ function getTimeRemaining(targetDate: Date) {
 
 const COUNTDOWN_TARGET = new Date("2025-06-05T00:00:00-03:00");
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeUrl }) => {
-  // We'll pick a random index for the playlist only once on mount
-  const [randomIndex] = useState(() => Math.floor(Math.random() * 13)); // Default: up to 13 videos
-  const [randomStart] = useState(() => Math.floor(Math.random() * 600)); // 0 to 299 seconds (0 to 5 min)
-  const embedUrl = getYouTubeEmbedUrl(youtubeUrl, randomIndex, randomStart);
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
+  const [videoEntries, setVideoEntries] = useState<VideoEntry[]>([]);
+  const [randomIdx, setRandomIdx] = useState<number | null>(null);
+  const [randomStart, setRandomStart] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState(getTimeRemaining(COUNTDOWN_TARGET));
 
+  // Fetch video list once
+  useEffect(() => {
+    fetch(videoListUrl)
+      .then((res) => res.text())
+      .then((text) => {
+        const entries: VideoEntry[] = text
+          .split("\n")
+          .map((line) => {
+            const [url, durationStr] = line.trim().split(",");
+            const id = extractVideoId(url);
+            if (!id) return null;
+            const duration = durationStr ? parseDuration(durationStr) : 0;
+            return { id, duration };
+          })
+          .filter((entry): entry is VideoEntry => !!entry && !!entry.id);
+        setVideoEntries(entries);
+        if (entries.length > 0) {
+          const idx = Math.floor(Math.random() * entries.length);
+          setRandomIdx(idx);
+          const dur = entries[idx].duration;
+          console.log(dur);
+          setRandomStart(dur > 0 ? Math.floor(Math.random() * dur) : 0);
+        }
+      });
+  }, [videoListUrl]);
+
+  // Change video every 20 seconds
+  useEffect(() => {
+    if (videoEntries.length === 0) return;
+    const interval = setInterval(() => {
+      setRandomIdx((prevIdx) => {
+        if (videoEntries.length === 1) return 0;
+        let nextIdx;
+        do {
+          nextIdx = Math.floor(Math.random() * videoEntries.length);
+        } while (nextIdx === prevIdx);
+        // Set random start for the new video
+        const dur = videoEntries[nextIdx].duration;
+        setRandomStart(dur > 0 ? Math.floor(Math.random() * dur) : 0);
+        return nextIdx;
+      });
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [videoEntries]);
+
+  // Countdown timer
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(getTimeRemaining(COUNTDOWN_TARGET));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  if (videoEntries.length === 0 || randomIdx === null) {
+    return (
+      <div style={{ color: "#fff", textAlign: "center" }}>
+        Carregando vídeo...
+      </div>
+    );
+  }
+
+  const embedUrl = getYouTubeEmbedUrl(videoEntries[randomIdx].id, randomStart);
 
   return (
     <div
@@ -77,7 +133,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeUrl }) => {
     >
       <iframe
         src={embedUrl}
-        title="YouTube playlist player"
+        title="YouTube video player"
         frameBorder="0"
         allow="autoplay; encrypted-media"
         allowFullScreen={false}
@@ -104,7 +160,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ youtubeUrl }) => {
         }}
       >
         {timeLeft.days} Dia(s), {timeLeft.hours}:{timeLeft.minutes}:
-        {timeLeft.seconds}
+        {String(timeLeft.seconds).padStart(2, "0")}
       </div>
     </div>
   );

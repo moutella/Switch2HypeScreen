@@ -4,11 +4,10 @@ import "./App.css";
 
 function App() {
   // Example YouTube URL and overlay text
-  const youtubeUrl =
-    "https://www.youtube.com/playlist?list=PL771bZwgPJ_zCcfiTVgQOJd-uDZdt992R";
-  const overlayText = "Welcome to Switch2Hype!";
 
-  return <VideoPlayer youtubeUrl={youtubeUrl} overlayText={overlayText} />;
+  return (
+    <VideoPlayer videoListUrl="https://raw.githubusercontent.com/moutella/Switch2HypeScreen/refs/heads/main/videolist.txt" />
+  );
 }
 
 export default App;
