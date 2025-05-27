@@ -1,20 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 
 type VideoPlayerProps = {
   videoListUrl: string;
 };
 
 type VideoEntry = {
-  id: string;
+  filename: string;
   duration: number; // in seconds
 };
-
-function extractVideoId(url: string): string | null {
-  const match = url.match(
-    /(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
-  );
-  return match ? match[1] : null;
-}
 
 function parseDuration(durationStr: string): number {
   const parts = durationStr.split(":").map(Number).reverse();
@@ -23,11 +16,6 @@ function parseDuration(durationStr: string): number {
   if (parts[1]) seconds += parts[1] * 60;
   if (parts[2]) seconds += parts[2] * 3600;
   return seconds;
-}
-
-function getYouTubeEmbedUrl(videoId: string, startSeconds?: number): string {
-  const startParam = startSeconds ? `&start=${startSeconds}` : "";
-  return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&mute=1&loop=1&playlist=${videoId}${startParam}`;
 }
 
 function getTimeRemaining(targetDate: Date) {
@@ -54,6 +42,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
   const [randomIdx, setRandomIdx] = useState<number | null>(null);
   const [randomStart, setRandomStart] = useState<number>(0);
   const [timeLeft, setTimeLeft] = useState(getTimeRemaining(COUNTDOWN_TARGET));
+  const [wipe, setWipe] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Fetch video list once
   useEffect(() => {
@@ -63,19 +53,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
         const entries: VideoEntry[] = text
           .split("\n")
           .map((line) => {
-            const [url, durationStr] = line.trim().split(",");
-            const id = extractVideoId(url);
-            if (!id) return null;
+            const [filename, durationStr] = line.trim().split(",");
+            if (!filename) return null;
             const duration = durationStr ? parseDuration(durationStr) : 0;
-            return { id, duration };
+            return { filename: filename.trim(), duration };
           })
-          .filter((entry): entry is VideoEntry => !!entry && !!entry.id);
+          .filter((entry): entry is VideoEntry => !!entry && !!entry.filename);
         setVideoEntries(entries);
         if (entries.length > 0) {
           const idx = Math.floor(Math.random() * entries.length);
           setRandomIdx(idx);
           const dur = entries[idx].duration;
-          setRandomStart(dur >= 300 ? Math.floor(Math.random() * dur) : 0);
+          setRandomStart(Math.floor(Math.random() * (dur - 8)));
         }
       });
   }, [videoListUrl]);
@@ -86,25 +75,32 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
     const current = videoEntries[randomIdx];
     let timeoutId: ReturnType<typeof setTimeout>;
 
-    // If duration is less than 5min, play from start and wait full duration
-    // If duration >= 5min, play from random start and wait (duration - randomStart) seconds
-    const waitTime = current.duration < 300 ? current.duration : 30;
+    let waitTime =
+      current.duration < 300
+        ? current.duration
+        : current.duration - randomStart;
+    waitTime = 2;
+
+    let wipeDuration = 200;
 
     timeoutId = setTimeout(() => {
-      setRandomIdx((prevIdx) => {
-        if (videoEntries.length === 1) return 0;
-        let nextIdx;
-        do {
-          nextIdx = Math.floor(Math.random() * videoEntries.length);
-        } while (nextIdx === prevIdx);
-        const dur = videoEntries[nextIdx].duration;
-        setRandomStart(dur >= 300 ? Math.floor(Math.random() * dur) : 0);
-        return nextIdx;
-      });
+      setWipe(true); // Start wipe effect
+      setTimeout(() => {
+        setRandomIdx((prevIdx) => {
+          if (videoEntries.length === 1) return 0;
+          let nextIdx;
+          do {
+            nextIdx = Math.floor(Math.random() * videoEntries.length);
+          } while (nextIdx === prevIdx);
+          const dur = videoEntries[nextIdx].duration;
+          setRandomStart(dur >= 300 ? Math.floor(Math.random() * dur) : 0);
+          return nextIdx;
+        });
+        setTimeout(() => setWipe(false), wipeDuration); // End wipe after animation
+      }, wipeDuration); // Duration of wipe animation in ms
     }, waitTime * 1000);
 
     return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line
   }, [videoEntries, randomIdx, randomStart]);
 
   // Countdown timer
@@ -115,6 +111,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
     return () => clearInterval(timer);
   }, []);
 
+  // Seek to random start when video changes
+  useEffect(() => {
+    if (
+      videoRef.current &&
+      randomIdx !== null &&
+      videoEntries[randomIdx] &&
+      randomStart > 0
+    ) {
+      videoRef.current.currentTime = randomStart;
+      videoRef.current.play();
+    }
+  }, [randomIdx, randomStart, videoEntries]);
+
   if (videoEntries.length === 0 || randomIdx === null) {
     return (
       <div style={{ color: "#fff", textAlign: "center" }}>
@@ -123,7 +132,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
     );
   }
 
-  const embedUrl = getYouTubeEmbedUrl(videoEntries[randomIdx].id, randomStart);
+  const currentVideo = videoEntries[randomIdx];
 
   return (
     <div
@@ -132,19 +141,38 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
+        background: "#000",
       }}
     >
-      <iframe
-        src={embedUrl}
-        title="YouTube video player"
-        frameBorder="0"
-        allow="autoplay; encrypted-media"
-        allowFullScreen={false}
+      <video
+        ref={videoRef}
+        src={`/Switch2HypeScreen/videos/${currentVideo.filename}`}
         style={{
           width: "100vw",
           height: "100vh",
-          border: "none",
+          objectFit: "cover",
           display: "block",
+        }}
+        autoPlay
+        muted
+        controls={false}
+      />
+      {/* Screen wipe effect */}
+      <div
+        style={{
+          pointerEvents: "none",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: wipe
+            ? `url("/Switch2HypeScreen/background.jpg") center center / cover no-repeat #000`
+            : `url("/Switch2HypeScreen/background.jpg") center center / cover no-repeat #000`,
+          zIndex: 10,
+          transition:
+            "transform 0.3s cubic-bezier(.77,0,.18,1), background .3s",
+          transform: wipe ? "translateX(0)" : "translateX(-100vw)",
         }}
       />
       <div
@@ -160,6 +188,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
           letterSpacing: "1px",
           pointerEvents: "none",
           textShadow: "2px 2px 8px #000, 0px 0px 4px #000",
+          zIndex: 20,
         }}
       >
         {timeLeft.days} Dia(s), {String(timeLeft.hours).padStart(2, "0")}:
