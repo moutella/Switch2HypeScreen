@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 type VideoPlayerProps = {
-  videoListUrl: string; // URL to a plain text file with video URLs, one per line
+  videoListUrl: string;
 };
 
 type VideoEntry = {
@@ -17,7 +17,6 @@ function extractVideoId(url: string): string | null {
 }
 
 function parseDuration(durationStr: string): number {
-  // Accepts "hh:mm:ss", "mm:ss", or "ss"
   const parts = durationStr.split(":").map(Number).reverse();
   let seconds = 0;
   if (parts[0]) seconds += parts[0];
@@ -32,10 +31,9 @@ function getYouTubeEmbedUrl(videoId: string, startSeconds?: number): string {
 }
 
 function getTimeRemaining(targetDate: Date) {
-  // Considera o horário de Brasília (UTC-3)
   const now = new Date();
   const nowInBrasilia = new Date(
-    now.getTime() - now.getTimezoneOffset() * 60000
+    now.getTime() - now.getTimezoneOffset() * 60000 - 3 * 60 * 60000
   );
   const diff = targetDate.getTime() - nowInBrasilia.getTime();
 
@@ -51,7 +49,7 @@ function getTimeRemaining(targetDate: Date) {
   return { days, hours, minutes, seconds };
 }
 
-const COUNTDOWN_TARGET = new Date("2025-06-05T00:00:00-00:00");
+const COUNTDOWN_TARGET = new Date("2025-06-05T00:00:00-03:00");
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
   const [videoEntries, setVideoEntries] = useState<VideoEntry[]>([]);
@@ -79,32 +77,37 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
           const idx = Math.floor(Math.random() * entries.length);
           setRandomIdx(idx);
           const dur = entries[idx].duration;
-          console.log(entries);
-          console.log(entries[idx].duration);
-          console.log(dur);
-          setRandomStart(dur > 0 ? Math.floor(Math.random() * dur) : 0);
+          setRandomStart(dur >= 300 ? Math.floor(Math.random() * dur) : 0);
         }
       });
   }, [videoListUrl]);
 
-  // Change video every 20 seconds
+  // Change video after its duration (if < 5min, no random start; if >= 5min, random start)
   useEffect(() => {
-    if (videoEntries.length === 0) return;
-    const interval = setInterval(() => {
+    if (videoEntries.length === 0 || randomIdx === null) return;
+    const current = videoEntries[randomIdx];
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    // If duration is less than 5min, play from start and wait full duration
+    // If duration >= 5min, play from random start and wait (duration - randomStart) seconds
+    const waitTime = current.duration < 300 ? current.duration : 30;
+
+    timeoutId = setTimeout(() => {
       setRandomIdx((prevIdx) => {
         if (videoEntries.length === 1) return 0;
         let nextIdx;
         do {
           nextIdx = Math.floor(Math.random() * videoEntries.length);
         } while (nextIdx === prevIdx);
-        // Set random start for the new video
         const dur = videoEntries[nextIdx].duration;
-        setRandomStart(dur > 0 ? Math.floor(Math.random() * dur) : 0);
+        setRandomStart(dur >= 300 ? Math.floor(Math.random() * dur) : 0);
         return nextIdx;
       });
-    }, 20000);
-    return () => clearInterval(interval);
-  }, [videoEntries]);
+    }, waitTime * 1000);
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line
+  }, [videoEntries, randomIdx, randomStart]);
 
   // Countdown timer
   useEffect(() => {
