@@ -32,9 +32,7 @@ function getYouTubeEmbedUrl(videoId: string, startSeconds?: number): string {
 
 function getTimeRemaining(targetDate: Date) {
   const now = new Date();
-  const nowInBrasilia = new Date(
-    now.getTime() - now.getTimezoneOffset() * 60000 - 3 * 60 * 60000
-  );
+  const nowInBrasilia = now;
   const diff = targetDate.getTime() - nowInBrasilia.getTime();
 
   if (diff <= 0) {
