@@ -157,7 +157,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoListUrl }) => {
           color: "#fff",
           textAlign: "center",
           padding: "24px 0",
-          fontSize: "5rem",
+          fontSize: "8rem",
           fontWeight: "bold",
           letterSpacing: "1px",
           pointerEvents: "none",
